@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import io
 import json
 import logging
 import os
 import re
 import shutil
+import socket
 import tempfile
 import time
 import zipfile
@@ -49,6 +51,74 @@ SPEAKER_EMBEDDING_TYPO_SUFFIX = ".speaker.safestensor"
 NO_REF_IDS = {"", "none", "no_ref", "no-ref", "null", "text-only"}
 DEFAULT_HF_CHECKPOINT = "Aratako/Irodori-TTS-v4-Small"
 MAX_VOICE_DESIGN_CANDIDATES = 32
+
+
+def _discover_local_ipv4_addresses() -> tuple[str, ...]:
+    """Return usable local IPv4 addresses, with the default-route address first."""
+    candidates: list[str] = []
+
+    # A UDP connect selects the OS default route without sending any packets.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            candidates.append(str(probe.getsockname()[0]))
+    except OSError:
+        pass
+
+    try:
+        candidates.extend(
+            str(info[4][0])
+            for info in socket.getaddrinfo(
+                socket.gethostname(),
+                None,
+                family=socket.AF_INET,
+                type=socket.SOCK_STREAM,
+            )
+        )
+    except OSError:
+        pass
+
+    addresses: list[str] = []
+    for candidate in candidates:
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if (
+            not isinstance(address, ipaddress.IPv4Address)
+            or address.is_loopback
+            or address.is_link_local
+            or address.is_multicast
+            or address.is_unspecified
+        ):
+            continue
+        normalized = str(address)
+        if normalized not in addresses:
+            addresses.append(normalized)
+    return tuple(addresses)
+
+
+def _connection_urls(bind_host: str, port: int) -> tuple[str, ...]:
+    host = bind_host.strip() or "0.0.0.0"
+    if host in {"0.0.0.0", "::", "[::]"}:
+        hosts = ("127.0.0.1", *_discover_local_ipv4_addresses())
+    else:
+        hosts = (host,)
+
+    urls: list[str] = []
+    for item in hosts:
+        url_host = item if ":" not in item or item.startswith("[") else f"[{item}]"
+        url = f"http://{url_host}:{port}"
+        if url not in urls:
+            urls.append(url)
+    return tuple(urls)
+
+
+def _print_connection_urls(bind_host: str, port: int) -> None:
+    print("MiRAI Head connection URL(s):", flush=True)
+    for url in _connection_urls(bind_host, port):
+        print(f"  {url}", flush=True)
+    print(flush=True)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -633,8 +703,11 @@ if __name__ == "__main__":
         level=os.getenv("MIRAI_IRODORI_LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    server_host = os.getenv("MIRAI_IRODORI_HOST", "0.0.0.0")
+    server_port = int(os.getenv("MIRAI_IRODORI_PORT", "5000"))
+    _print_connection_urls(server_host, server_port)
     uvicorn.run(
         app,
-        host=os.getenv("MIRAI_IRODORI_HOST", "0.0.0.0"),
-        port=int(os.getenv("MIRAI_IRODORI_PORT", "5000")),
+        host=server_host,
+        port=server_port,
     )
