@@ -101,7 +101,9 @@ def _discover_local_ipv4_addresses() -> tuple[str, ...]:
 def _connection_urls(bind_host: str, port: int) -> tuple[str, ...]:
     host = bind_host.strip() or "0.0.0.0"
     if host in {"0.0.0.0", "::", "[::]"}:
-        hosts = ("127.0.0.1", *_discover_local_ipv4_addresses())
+        hosts = _discover_local_ipv4_addresses()
+    elif host.casefold() in {"localhost", "127.0.0.1", "::1", "[::1]"}:
+        hosts = ()
     else:
         hosts = (host,)
 
@@ -116,8 +118,12 @@ def _connection_urls(bind_host: str, port: int) -> tuple[str, ...]:
 
 def _print_connection_urls(bind_host: str, port: int) -> None:
     print("MiRAI Head connection URL(s):", flush=True)
-    for url in _connection_urls(bind_host, port):
-        print(f"  {url}", flush=True)
+    urls = _connection_urls(bind_host, port)
+    if urls:
+        for url in urls:
+            print(f"  {url}", flush=True)
+    else:
+        print("  No LAN IPv4 address detected.", flush=True)
     print(flush=True)
 
 
@@ -463,6 +469,9 @@ async def lifespan(_app: FastAPI):
     VOICE_REGISTRY.ensure_root()
     if _env_bool("MIRAI_IRODORI_PRELOAD"):
         await asyncio.to_thread(get_runtime)
+    server_host = os.getenv("MIRAI_IRODORI_HOST", "0.0.0.0")
+    server_port = int(os.getenv("MIRAI_IRODORI_PORT", "5000"))
+    _print_connection_urls(server_host, server_port)
     yield
 
 
@@ -705,7 +714,6 @@ if __name__ == "__main__":
     )
     server_host = os.getenv("MIRAI_IRODORI_HOST", "0.0.0.0")
     server_port = int(os.getenv("MIRAI_IRODORI_PORT", "5000"))
-    _print_connection_urls(server_host, server_port)
     uvicorn.run(
         app,
         host=server_host,

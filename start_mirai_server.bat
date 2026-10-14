@@ -20,7 +20,7 @@ if errorlevel 1 (
 
 echo ============================================================
 echo  MiRaiHead Irodori-TTS v4 Server
-echo  Connection URL(s) will be shown below.
+echo  Connection URL(s) will be shown after the model is ready.
 echo  Voices: %CD%\voices
 echo  Preload: enabled
 echo  Model revision: e4aaac4df355ff560dcd35e0dae272c3a759317b
