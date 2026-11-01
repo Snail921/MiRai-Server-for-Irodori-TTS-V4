@@ -534,6 +534,7 @@ async def synthesize(
     if cfg_guidance_mode not in {"independent", "joint", "alternating"}:
         raise HTTPException(status_code=400, detail="unsupported cfg_guidance_mode")
 
+    LOGGER.info("[TTS] Received text: %s", json.dumps(clean_text, ensure_ascii=False))
     voice, fell_back = VOICE_REGISTRY.resolve(speaker_id)
     request = SamplingRequest(
         text=clean_text,
@@ -558,6 +559,11 @@ async def synthesize(
 
     elapsed = time.perf_counter() - started
     duration = float(result.audio.shape[-1]) / float(result.sample_rate)
+    LOGGER.info(
+        "[TTS] Generation completed in %.3f s (audio duration: %.3f s)",
+        elapsed,
+        duration,
+    )
     wav_bytes = await asyncio.to_thread(_encode_wav, result.audio, result.sample_rate)
     headers = {
         "X-Inference-Time": f"{elapsed:.3f}",
@@ -626,6 +632,10 @@ async def voice_design(
         raise HTTPException(status_code=400, detail="seconds must be greater than zero")
     parsed_seed = _optional_int(seed, "seed")
 
+    LOGGER.info(
+        "[Voice Design] Received text: %s",
+        json.dumps(clean_text, ensure_ascii=False),
+    )
     with tempfile.TemporaryDirectory(prefix="mirai-voice-design-") as temp_dir:
         ref_wavs = await _save_reference_uploads(reference_audio, Path(temp_dir))
         if ref_wavs:
@@ -694,6 +704,11 @@ async def voice_design(
             LOGGER.exception("Irodori-TTS voice design failed")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         elapsed = time.perf_counter() - started
+        LOGGER.info(
+            "[Voice Design] Generation completed in %.3f s (%d candidate(s))",
+            elapsed,
+            len(result.audios),
+        )
         archive = await asyncio.to_thread(_encode_voice_design_zip, result, elapsed)
 
     headers = {

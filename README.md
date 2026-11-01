@@ -85,6 +85,17 @@ Uvicorn running on http://0.0.0.0:5000
 
 終了するときは、バッチのウィンドウで `Ctrl+C` を押します。
 
+### 生成リクエストのコンソール表示
+
+MiRaiHeadから文章を受信すると、受信した本文をコンソールへ表示します。生成完了後には、生成処理にかかった時間と生成音声の長さを表示します。
+
+```text
+INFO mirai-irodori-server: [TTS] Received text: "こんにちは。音声合成のテストです。"
+INFO mirai-irodori-server: [TTS] Generation completed in 4.321 s (audio duration: 2.500 s)
+```
+
+改行などはエスケープして1件のログに収めます。Voice Designの場合は `[Voice Design]` と候補数が表示されます。生成時間にはランタイムの取得と音声生成が含まれ、HTTP転送時間は含まれません。
+
 ## MiRaiHead側の接続先
 
 MiRaiHeadとサーバーが同じPCの場合:
